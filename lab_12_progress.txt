@@ -1,0 +1,13 @@
+LAB 12 PROGRESS ? PROJECT FILE RESTORATION
+
+The project contains the Lab 12 monitoring and continuous-training scripts,
+including data/prediction/concept drift analysis, performance monitoring,
+model comparison, retraining, and MLflow registry update utilities.
+
+The related Lab 13 integration report is docs/LAB13_END_TO_END.md. Its
+recorded metrics describe the run documented there; they are not live results
+from this file restoration.
+
+No Lab 12 monitoring, retraining, or deployment run was started while creating
+this progress note. Review the corresponding reports and timestamps before
+claiming a new run has completed.

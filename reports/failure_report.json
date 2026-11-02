@@ -1,0 +1,115 @@
+{
+  "stage": "Lab 9 failure handling",
+  "repetitions": 3,
+  "runs": [
+    {
+      "repetition": 1,
+      "results": [
+        {
+          "scenario": "missing_data",
+          "expected": "HALT",
+          "actual": "HALT",
+          "passed": true
+        },
+        {
+          "scenario": "invalid_datatype",
+          "expected": "HALT",
+          "actual": "HALT",
+          "passed": true
+        },
+        {
+          "scenario": "schema_mismatch",
+          "expected": "HALT",
+          "actual": "HALT",
+          "passed": true
+        },
+        {
+          "scenario": "preprocessing_inconsistency",
+          "expected": "HALT",
+          "actual": "HALT",
+          "passed": true
+        },
+        {
+          "scenario": "missing_model_artifact_recovery",
+          "expected": "RECOVER",
+          "actual": "RECOVERED",
+          "passed": true
+        }
+      ],
+      "passed": true
+    },
+    {
+      "repetition": 2,
+      "results": [
+        {
+          "scenario": "missing_data",
+          "expected": "HALT",
+          "actual": "HALT",
+          "passed": true
+        },
+        {
+          "scenario": "invalid_datatype",
+          "expected": "HALT",
+          "actual": "HALT",
+          "passed": true
+        },
+        {
+          "scenario": "schema_mismatch",
+          "expected": "HALT",
+          "actual": "HALT",
+          "passed": true
+        },
+        {
+          "scenario": "preprocessing_inconsistency",
+          "expected": "HALT",
+          "actual": "HALT",
+          "passed": true
+        },
+        {
+          "scenario": "missing_model_artifact_recovery",
+          "expected": "RECOVER",
+          "actual": "RECOVERED",
+          "passed": true
+        }
+      ],
+      "passed": true
+    },
+    {
+      "repetition": 3,
+      "results": [
+        {
+          "scenario": "missing_data",
+          "expected": "HALT",
+          "actual": "HALT",
+          "passed": true
+        },
+        {
+          "scenario": "invalid_datatype",
+          "expected": "HALT",
+          "actual": "HALT",
+          "passed": true
+        },
+        {
+          "scenario": "schema_mismatch",
+          "expected": "HALT",
+          "actual": "HALT",
+          "passed": true
+        },
+        {
+          "scenario": "preprocessing_inconsistency",
+          "expected": "HALT",
+          "actual": "HALT",
+          "passed": true
+        },
+        {
+          "scenario": "missing_model_artifact_recovery",
+          "expected": "RECOVER",
+          "actual": "RECOVERED",
+          "passed": true
+        }
+      ],
+      "passed": true
+    }
+  ],
+  "overall_status": "PASSED"
+}

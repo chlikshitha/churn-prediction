@@ -1,0 +1,21 @@
+{
+  "stage": "Lab 8/9 model evaluation",
+  "test_rows": 1409,
+  "metrics": {
+    "accuracy": 0.7601135557132718,
+    "precision": 0.5340909090909091,
+    "recall": 0.7540106951871658,
+    "f1_score": 0.6252771618625277,
+    "roc_auc": 0.84119197085949
+  },
+  "confusion_matrix": [
+    [
+      789,
+      246
+    ],
+    [
+      92,
+      282
+    ]
+  ]
+}
