@@ -1,22 +1,76 @@
-"""Evaluate the saved full raw-input pipeline and create evaluation visuals."""
 import json
-from pathlib import Path
-import joblib, numpy as np, pandas as pd, yaml
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score, confusion_matrix, ConfusionMatrixDisplay, RocCurveDisplay
-ROOT=Path(__file__).resolve().parents[2]
-def main():
-    cfg=yaml.safe_load((ROOT/"config.yaml").read_text(encoding="utf-8")); d=ROOT/cfg["data"]["processed_dir"]; model=joblib.load(ROOT/cfg["paths"]["full_pipeline"])
-    X=pd.read_csv(d/"X_test_raw.csv"); y=np.load(d/"y_test.npy"); pred=model.predict(X); proba=model.predict_proba(X)[:,1]
-    metrics={"accuracy":float(accuracy_score(y,pred)),"precision":float(precision_score(y,pred,zero_division=0)),"recall":float(recall_score(y,pred,zero_division=0)),"f1_score":float(f1_score(y,pred,zero_division=0)),"roc_auc":float(roc_auc_score(y,proba))}
-    report={"stage":"Lab 8/9 model evaluation","test_rows":len(y),"metrics":metrics,"confusion_matrix":confusion_matrix(y,pred).tolist()}; out=ROOT/cfg["paths"]["evaluation_report"]; out.parent.mkdir(parents=True,exist_ok=True); out.write_text(json.dumps(report,indent=2),encoding="utf-8")
-    art=ROOT/"artifacts"; art.mkdir(exist_ok=True); fig,ax=plt.subplots(); ConfusionMatrixDisplay.from_predictions(y,pred,ax=ax); fig.savefig(art/"confusion_matrix.png",bbox_inches="tight"); plt.close(fig)
-    fig,ax=plt.subplots(); RocCurveDisplay.from_predictions(y,proba,ax=ax); fig.savefig(art/"roc_curve.png",bbox_inches="tight"); plt.close(fig)
-    fn=X.loc[(y==1)&(pred==0)].copy(); fp=X.loc[(y==0)&(pred==1)].copy(); (ROOT/"outputs").mkdir(exist_ok=True)
-    fn_out=fn.assign(Actual_Churn=1,Predicted_Churn=0); fp_out=fp.assign(Actual_Churn=0,Predicted_Churn=1)
-    fn_out.to_csv(ROOT/"outputs"/"false_negatives.csv",index=False); fp_out.to_csv(ROOT/"outputs"/"false_positives.csv",index=False)
-    fn_out.to_csv(ROOT/"outputs"/"lab7_false_negatives.csv",index=False); fp_out.to_csv(ROOT/"outputs"/"lab7_false_positives.csv",index=False)
-    print("Evaluation report:",out.relative_to(ROOT))
-if __name__=="__main__": main()
+import os
+import sys
+
+import joblib
+import numpy as np
+import yaml
+from sklearn.metrics import (
+    accuracy_score,
+    confusion_matrix,
+    f1_score,
+    precision_score,
+    recall_score,
+    roc_auc_score,
+)
+
+
+def run_evaluation():
+    print("[INFO] Starting ML Pipeline Model Evaluation...")
+
+    with open("config.yaml", "r", encoding="utf-8") as f:
+        config = yaml.safe_load(f)
+
+    model_path = config["paths"]["model"]
+    processed_dir = config["data"]["processed_dir"]
+
+    if not os.path.exists(model_path):
+        print(f"[ERROR] Model not found at {model_path}. Run 05_train_registry_mlops.py first.")
+        return False
+
+    try:
+        X_test = np.load(os.path.join(processed_dir, "X_test_final.npy"))
+        y_test = np.load(os.path.join(processed_dir, "y_test.npy"))
+    except FileNotFoundError:
+        print("[ERROR] Test data not found. Run 03_preprocessing_mlops.py first.")
+        return False
+
+    model = joblib.load(model_path)
+    y_pred = model.predict(X_test)
+    y_proba = model.predict_proba(X_test)[:, 1]
+
+    cm = confusion_matrix(y_test, y_pred)
+    metrics = {
+        "accuracy": accuracy_score(y_test, y_pred),
+        "precision": precision_score(y_test, y_pred, zero_division=0),
+        "recall": recall_score(y_test, y_pred, zero_division=0),
+        "f1_score": f1_score(y_test, y_pred, zero_division=0),
+        "roc_auc": roc_auc_score(y_test, y_proba),
+    }
+
+    print("\n--- ML Pipeline: Model Evaluation ---")
+    for name, value in metrics.items():
+        print(f"{name.replace('_', ' ').title():10}: {value:.4f}")
+    print(f"Confusion Matrix:\n{cm}")
+    print("--------------------------------\n")
+
+    report = {
+        "stage": "ML Pipeline - Model Evaluation",
+        "evaluated_on": "held-out test split",
+        "test_rows": int(len(y_test)),
+        "metrics": {name: round(float(value), 4) for name, value in metrics.items()},
+        "confusion_matrix": cm.tolist(),
+    }
+
+    os.makedirs("reports", exist_ok=True)
+    report_path = config["paths"]["evaluation_report"]
+    with open(report_path, "w", encoding="utf-8") as f:
+        json.dump(report, f, indent=4)
+
+    print(f"[SUCCESS] Evaluation report saved to {report_path}")
+    return True
+
+
+if __name__ == "__main__":
+    passed = run_evaluation()
+    sys.exit(0 if passed else 1)

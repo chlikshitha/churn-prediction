@@ -12,8 +12,20 @@ from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.impute import SimpleImputer
 
 
+def clean_prediction_data(df: pd.DataFrame, config: dict | None = None) -> pd.DataFrame:
+    """Prepare raw API customer rows for the fitted churn pipeline."""
+    df = df.copy()
+    data_config = (config or {}).get("data", {})
+    target_column = data_config.get("target_column", "Churn")
+    id_column = data_config.get("id_column", "customerID")
+    df = df.drop(columns=[column for column in (id_column, target_column) if column in df.columns])
+    if "TotalCharges" in df.columns:
+        df["TotalCharges"] = pd.to_numeric(df["TotalCharges"], errors="coerce")
+    return df
+
+
 def clean_dataframe(df, config):
-    """Apply deterministic dataset cleaning shared by training and inference."""
+
     df = df.copy()
     target_column = config["data"]["target_column"]
     id_column = config["data"]["id_column"]
@@ -35,7 +47,7 @@ def clean_dataframe(df, config):
 
 
 def split_raw_data(df, config):
-    """Clean the raw dataset and create the reproducible train/test split."""
+
     target_column = config["data"]["target_column"]
     cleaned = clean_dataframe(df, config)
 
@@ -52,7 +64,7 @@ def split_raw_data(df, config):
 
 
 def build_preprocessor(X_train):
-    """Create the single canonical feature-preprocessing pipeline used by ML Pipeline."""
+
     cat_cols = X_train.select_dtypes(include=["object", "category"]).columns.tolist()
     num_cols = X_train.select_dtypes(include=["int64", "float64"]).columns.tolist()
 
@@ -103,14 +115,13 @@ def run_preprocessing():
     os.makedirs(processed_dir, exist_ok=True)
     os.makedirs("models", exist_ok=True)
 
-    # Persist transformed matrices for the validation stage and reproducibility checks.
+
     np.save(os.path.join(processed_dir, "X_train_final.npy"), X_train_final)
     np.save(os.path.join(processed_dir, "X_test_final.npy"), X_test_final)
     np.save(os.path.join(processed_dir, "y_train.npy"), y_train.to_numpy(dtype=np.int64))
     np.save(os.path.join(processed_dir, "y_test.npy"), y_test.to_numpy(dtype=np.int64))
 
-    # Persist the raw split used by the training/evaluation stages so the registered
-    # model can own preprocessing + model in one deployable Pipeline artifact.
+
     X_train.to_csv(os.path.join(processed_dir, "X_train_raw.csv"), index=False)
     X_test.to_csv(os.path.join(processed_dir, "X_test_raw.csv"), index=False)
 

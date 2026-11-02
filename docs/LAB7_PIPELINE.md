@@ -1,11 +1,36 @@
-# Lab 7: End to end pipeline
+# Lab 7 — ML Pipeline Engineering
 
-The pipeline in src/mlops_pipeline/churn_prediction_pipeline.py runs data loading, raw data validation, deterministic preprocessing, processed output checks, model training and MLflow registration, evaluation, the quality gate, lifecycle alias assignment, inference, and Lab 9 failure simulations.
+Lab 7 builds the core churn prediction ML pipeline.
 
-Run it from the repository root with:
+Normal stages introduced in Lab 7:
 
-    python src/mlops_pipeline/churn_prediction_pipeline.py
+```text
+01 Load Data
+02 Raw Data Validation
+03 Preprocessing
+04 Processed Output Validation
+05 Training + MLflow + Model Registry
+06 Model Evaluation
+08 Automated Model Lifecycle
+09 Production Inference
+```
 
-The raw feature splits are preserved in data/processed/; the fitted full pipeline is saved at models/churn_full_pipeline.pkl. Evaluation metrics are written to reports/evaluation_report.json, plots and stage reports to artifacts/, and predictions to outputs/inference_predictions.csv.
+Lab 8 later inserts `07_quality_gate.py` between evaluation and lifecycle.
 
-The pipeline stops on the first failed stage and records each attempted stage in logs/churn_prediction_pipeline_run_log.json.
+Run the pipeline after the Lab 7 stages are implemented:
+
+```bash
+python src/mlops_pipeline/churn_prediction_pipeline.py
+```
+
+Training uses one Random Forest trained on the full training split. Evaluation is done on the held-out test split using accuracy, precision, recall, F1 and ROC-AUC. MLflow records the parameters and metrics and registers each trained model under:
+
+```text
+Telco_Churn_Production_Model
+```
+
+The lifecycle uses the course-friendly stages:
+
+```text
+None → Staging → Production / Archived
+```

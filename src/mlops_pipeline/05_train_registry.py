@@ -1,37 +1,105 @@
-"""Train a raw-feature sklearn pipeline and log/register it in MLflow."""
-import json, os
-from pathlib import Path
-import joblib, mlflow, mlflow.sklearn, numpy as np, pandas as pd, yaml
-from sklearn.compose import ColumnTransformer
+import os
+import sys
+
+import joblib
+import mlflow
+import mlflow.sklearn
+import numpy as np
+import yaml
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.impute import SimpleImputer
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import OneHotEncoder, StandardScaler
-from xgboost import XGBClassifier
-ROOT=Path(__file__).resolve().parents[2]
-def main():
-    os.chdir(ROOT); cfg=yaml.safe_load((ROOT/"config.yaml").read_text(encoding="utf-8"))
-    mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI",cfg["mlflow"]["tracking_uri"])); mlflow.set_experiment(cfg["mlflow"]["experiment_name"])
-    d=ROOT/cfg["data"]["processed_dir"]; Xtr=pd.read_csv(d/"X_train_raw.csv"); Xte=pd.read_csv(d/"X_test_raw.csv"); ytr=np.load(d/"y_train.npy"); yte=np.load(d/"y_test.npy")
-    cats=Xtr.select_dtypes(include=["object","category"]).columns.tolist(); nums=Xtr.select_dtypes(include=["number"]).columns.tolist()
-    pre=ColumnTransformer([("num",Pipeline([("imputer",SimpleImputer(strategy="constant",fill_value=0)),("scale",StandardScaler())]),nums),("cat",Pipeline([("imputer",SimpleImputer(strategy="most_frequent")),("ohe",OneHotEncoder(handle_unknown="ignore",sparse_output=False))]),cats)])
-    m=cfg["model"]; estimator=RandomForestClassifier(n_estimators=int(m["n_estimators"]),max_depth=m["max_depth"],random_state=int(m["random_state"]),class_weight=m["class_weight"])
-    model=Pipeline([("preprocessor",pre),("classifier",estimator)]); model.fit(Xtr,ytr); pred=model.predict(Xte); prob=model.predict_proba(Xte)[:,1]
-    metrics={"accuracy":float(accuracy_score(yte,pred)),"precision":float(precision_score(yte,pred,zero_division=0)),"recall":float(recall_score(yte,pred,zero_division=0)),"f1_score":float(f1_score(yte,pred,zero_division=0)),"roc_auc":float(roc_auc_score(yte,prob))}
-    os.makedirs("models",exist_ok=True); joblib.dump(model,cfg["paths"]["full_pipeline"]); joblib.dump(model.named_steps["classifier"],cfg["paths"]["model"])
-    Xtr_processed=np.load(d/"X_train_final.npy"); ytr_processed=np.load(d/"y_train.npy")
-    joblib.dump(DecisionTreeClassifier(random_state=int(m["random_state"])).fit(Xtr_processed,ytr_processed),"models/decision_tree_baseline.pkl")
-    joblib.dump(0.5,"models/churn_decision_threshold.pkl")
-    from sklearn.base import clone
-    xgb_pipeline=Pipeline([("preprocessor",clone(pre)),("classifier",XGBClassifier(n_estimators=150,max_depth=5,learning_rate=0.05,subsample=0.8,colsample_bytree=0.8,objective="binary:logistic",eval_metric="logloss",n_jobs=1,random_state=int(m["random_state"])))])
-    xgb_pipeline.fit(Xtr,ytr)
-    joblib.dump(xgb_pipeline,"models/churn_xgboost_pipeline.pkl")
-    with mlflow.start_run(run_name="Lab9_RandomForest_Pipeline") as run:
-        mlflow.log_params({"n_estimators":m["n_estimators"],"max_depth":m["max_depth"],"random_state":m["random_state"],"class_weight":m["class_weight"]}); mlflow.log_metrics(metrics)
-        mlflow.log_param("model_family","RandomForestPipeline")
-        mlflow.sklearn.log_model(model, name="model", registered_model_name=cfg["registry"]["model_name"], skops_trusted_types=["sklearn.tree._tree.Tree","numpy.dtype"])
-        (ROOT/"artifacts").mkdir(exist_ok=True); (ROOT/"artifacts"/"production_model_report.json").write_text(json.dumps({"run_id":run.info.run_id,"model_name":cfg["registry"]["model_name"],"metrics":metrics},indent=2),encoding="utf-8")
-    print("Logged pipeline and registered model; metrics:",metrics)
-if __name__=="__main__": main()
+
+
+def configure_mlflow(config):
+    tracking_uri = os.getenv("MLFLOW_TRACKING_URI") or config["mlflow"].get("tracking_uri")
+    if tracking_uri:
+        mlflow.set_tracking_uri(tracking_uri)
+
+
+def train_and_register_model():
+    print("[INFO] --- Starting MLflow Run with Model Registry ---")
+
+    with open("config.yaml", "r", encoding="utf-8") as f:
+        config = yaml.safe_load(f)
+
+    configure_mlflow(config)
+    mlflow.set_experiment(config["mlflow"]["experiment_name"])
+
+    processed_dir = config["data"]["processed_dir"]
+
+    try:
+        X_train = np.load(os.path.join(processed_dir, "X_train_final.npy"))
+        X_test = np.load(os.path.join(processed_dir, "X_test_final.npy"))
+        y_train = np.load(os.path.join(processed_dir, "y_train.npy"))
+        y_test = np.load(os.path.join(processed_dir, "y_test.npy"))
+    except FileNotFoundError:
+        print("[ERROR] Processed data not found. Please run 03_preprocessing_mlops.py first.")
+        return False
+
+    model_cfg = config["model"]
+
+    params = {
+        "n_estimators": model_cfg["n_estimators"],
+        "max_depth": model_cfg["max_depth"],
+        "random_state": model_cfg["random_state"],
+        "class_weight": model_cfg["class_weight"],
+    }
+
+    with mlflow.start_run(run_name="RandomForest") as run:
+        mlflow.log_params(params)
+        mlflow.log_param("model_family", "RandomForest")
+        mlflow.log_param("lab", "ML Pipeline")
+
+        if os.getenv("GITHUB_RUN_ID"):
+            mlflow.log_param("github_run_id", os.getenv("GITHUB_RUN_ID"))
+        if os.getenv("GITHUB_SHA"):
+            mlflow.log_param("github_commit", os.getenv("GITHUB_SHA"))
+
+        print("[INFO] Training RandomForest model...")
+        model = RandomForestClassifier(**params)
+        model.fit(X_train, y_train)
+
+        print("[INFO] Evaluating model on the held-out test set...")
+        y_pred = model.predict(X_test)
+        y_proba = model.predict_proba(X_test)[:, 1]
+
+        metrics = {
+            "accuracy": accuracy_score(y_test, y_pred),
+            "precision": precision_score(y_test, y_pred, zero_division=0),
+            "recall": recall_score(y_test, y_pred, zero_division=0),
+            "f1_score": f1_score(y_test, y_pred, zero_division=0),
+            "roc_auc": roc_auc_score(y_test, y_proba),
+        }
+
+        mlflow.log_metrics(metrics)
+
+        os.makedirs("models", exist_ok=True)
+        joblib.dump(model, config["paths"]["model"])
+
+        preprocessor_path = config["paths"]["preprocessor"]
+        if os.path.exists(preprocessor_path):
+            mlflow.log_artifact(preprocessor_path, artifact_path="preprocessing_pipeline")
+
+        print("[INFO] Pushing model to MLflow Registry...")
+        mlflow.sklearn.log_model(
+            sk_model=model,
+            name="random_forest_model",
+            registered_model_name=config["registry"]["model_name"],
+        )
+
+        print(
+            f"[SUCCESS] Accuracy={metrics['accuracy']:.4f} | "
+            f"Recall={metrics['recall']:.4f} | "
+            f"F1={metrics['f1_score']:.4f} | "
+            f"ROC-AUC={metrics['roc_auc']:.4f}"
+        )
+        print(f"[SUCCESS] Model saved to {config['paths']['model']}")
+        print(f"[SUCCESS] Model registered as '{config['registry']['model_name']}'")
+        print(f"[INFO] MLflow Run ID: {run.info.run_id}")
+
+    return True
+
+
+if __name__ == "__main__":
+    passed = train_and_register_model()
+    sys.exit(0 if passed else 1)

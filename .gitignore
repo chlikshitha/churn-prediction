@@ -1,20 +1,34 @@
-.venv/
+# Environments
 venv/
 env/
 __pycache__/
-*.pyc
 .ipynb_checkpoints/
 
+# Ignore ALL data files
+data/raw/*.csv
+!data/raw/churn.csv
 data/processed/*.npy
 
+# Ignore model artifacts
 models/*.pkl
 
-outputs/
 logs/
-artifacts/
+outputs/
 
+.vscode/
+
+# Ignore MLflow tracking data and databases
 mlruns/
 mlflow.db
 
-.vscode/
+# Ignore locally generated artifact plots and reports
+artifacts/
+
+# Local environments, caches, secrets, and audit backups
+.venv/
+.pytest_cache/
+*.pyc
+*.pyo
+.env
+.env.*
 .lab9_backups/

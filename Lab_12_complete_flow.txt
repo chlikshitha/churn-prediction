@@ -1,0 +1,58 @@
+LAB 12 ? MONITORING, DRIFT, AND CONTINUOUS TRAINING FLOW
+
+Purpose
+-------
+Lab 12 adds monitoring and retraining tools around the existing churn model
+pipeline. It prepares updated or evolved data, measures data/prediction/concept
+drift and performance, compares models, and records retraining/registry results.
+
+Typical flow
+------------
+1. Review the configured input and existing reports before generating data.
+   Dataset preparation utilities include:
+     src/mlops_pipeline/12_create_updated_dataset.py
+     src/mlops_pipeline/12_create_evolved_dataset.py
+     src/mlops_pipeline/12_create_concept_drift_dataset.py
+
+2. Run the monitoring utilities appropriate to the exercise:
+     src/mlops_pipeline/12_data_drift.py
+     src/mlops_pipeline/12_prediction_drift.py
+     src/mlops_pipeline/12_concept_drift.py
+     src/mlops_pipeline/12_performance_monitoring.py
+     src/mlops_pipeline/12_prediction_monitoring.py
+     src/mlops_pipeline/12_api_performance_monitoring.py
+
+3. Consolidate and inspect monitoring results with:
+     src/mlops_pipeline/12_drift_analysis.py
+     src/mlops_pipeline/12_performance_trend.py
+     src/mlops_pipeline/12_model_comparison.py
+     src/mlops_pipeline/12_request_history.py
+
+4. For a Lab 13 monitoring cycle, run from the repository root:
+     python src/mlops_pipeline/12_monitor_trigger.py
+   The trigger combines the available drift reports and checks for
+   data/raw/new_churn.csv. When drift and an incoming batch are both present,
+   it invokes src/mlops_pipeline/churn_prediction_pipeline.py. The data loader
+   uses batch identity/lineage checks to avoid ingesting a previously consumed
+   batch again.
+
+5. The integrated pipeline validates and ingests a new batch, preprocesses the
+   data, trains and evaluates a candidate, applies the quality gate and
+   lifecycle decision, updates deployment only after promotion, and runs
+   production inference. Review the generated report files under artifacts/,
+   reports/, logs/, and outputs/.
+
+6. The separate Lab 12 continuous-training and registry utilities include:
+     src/mlops_pipeline/12_retrain_model.py
+     src/mlops_pipeline/12_update_mlflow_registry.py
+   Read each script and the project configuration before running a utility
+   independently; these commands can update datasets, models, or MLflow state.
+
+Notes
+-----
+- Drift values and model metrics are measurements from a particular run, not
+  permanent facts about future data.
+- A quality-gate pass does not guarantee promotion; lifecycle policy compares
+  the candidate with the current Production model.
+- Do not interpret the presence of a report file as evidence that it is fresh.
+  Check its timestamp and the matching run log.

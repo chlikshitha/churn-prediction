@@ -1,19 +1,53 @@
-name: Lab 8 CI
+name: Lab 8 - MLOps CI
+
 on:
   push:
+    branches: [main, master]
+    paths:
+      - "config.yaml"
+      - "src/mlops_pipeline/**"
+      - "requirements.txt"
+      - "data/raw/churn.csv"
+      - ".github/workflows/lab8_ci.yml"
   pull_request:
+    paths:
+      - "config.yaml"
+      - "src/mlops_pipeline/**"
+      - "requirements.txt"
+      - "data/raw/churn.csv"
+      - ".github/workflows/lab8_ci.yml"
   workflow_dispatch:
+
 jobs:
-  pipeline:
+  mlops-ci:
     runs-on: ubuntu-latest
+    env:
+      MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: pip
-      - run: python -m pip install --upgrade pip
-      - run: python -m pip install pandas numpy scikit-learn PyYAML joblib mlflow matplotlib xgboost-cpu
-      - run: python -m compileall -q src pipelines tests
-      - run: python -m unittest discover -s tests -v
-      - run: python src/mlops_pipeline/churn_prediction_pipeline.py --through-lab8
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Run Churn Prediction MLOps Pipeline
+        run: python src/mlops_pipeline/churn_prediction_pipeline.py
+
+      - name: Upload CI artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lab8-ci-${{ github.run_number }}
+          path: |
+            artifacts/**
+            reports/**
+            logs/**
+            outputs/**
+            models/**
+            mlruns/**
+          if-no-files-found: ignore
