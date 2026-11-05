@@ -103,9 +103,11 @@ def root():
 
 @app.get("/health")
 def health():
-    return {
-        "status": "healthy",
-    }
+    ready = model_loader.is_ready()
+    return JSONResponse(
+        status_code=200 if ready else 503,
+        content={"status": "healthy" if ready else "unavailable"},
+    )
 
 
 @app.get("/metadata")

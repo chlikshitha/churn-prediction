@@ -22,10 +22,11 @@ def load_data():
     baseline = pd.read_csv(BASELINE_PATH)
     evolved = pd.read_csv(EVOLVED_PATH)
 
-    if baseline.shape != evolved.shape:
-        raise ValueError(
-            f"Dataset shape mismatch: baseline={baseline.shape}, evolved={evolved.shape}"
-        )
+    missing = sorted(set(baseline.columns) - set(evolved.columns))
+    if missing:
+        raise ValueError(f"Evolved drift dataset is missing baseline columns: {missing}")
+    if baseline.empty or evolved.empty:
+        raise ValueError("Prediction drift analysis requires non-empty datasets")
 
     return baseline, evolved
 
@@ -108,6 +109,7 @@ def main():
 
     model_loader = ModelLoader()
     model_loader.load()
+    model_loader.require_verified_production()
 
     print()
     print("Model information")
@@ -144,6 +146,13 @@ def main():
         baseline_probabilities,
         evolved_probabilities,
     )
+    results.update({
+        "model_name": model_loader.model_name,
+        "model_version": str(model_loader.model_version),
+        "run_id": model_loader.run_id,
+        "model_stage": model_loader.metadata.get("model_stage"),
+        "model_uri": model_loader.model_uri,
+    })
 
     print()
     print("=" * 70)

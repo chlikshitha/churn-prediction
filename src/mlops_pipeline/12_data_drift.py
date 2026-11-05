@@ -18,10 +18,12 @@ def load_data():
     baseline = pd.read_csv(BASELINE_PATH)
     evolved = pd.read_csv(EVOLVED_PATH)
 
-    if baseline.shape != evolved.shape:
-        raise ValueError(
-            f"Dataset shape mismatch: baseline={baseline.shape}, evolved={evolved.shape}"
-        )
+    missing = sorted(set(NUMERICAL_COLUMNS + CATEGORICAL_COLUMNS) - set(baseline.columns))
+    missing_evolved = sorted(set(NUMERICAL_COLUMNS + CATEGORICAL_COLUMNS) - set(evolved.columns))
+    if missing or missing_evolved:
+        raise ValueError(f"Drift inputs missing required columns: baseline={missing}, evolved={missing_evolved}")
+    if baseline.empty or evolved.empty:
+        raise ValueError("Drift analysis requires non-empty baseline and evolved datasets")
 
     return baseline, evolved
 

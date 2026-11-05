@@ -192,6 +192,12 @@ quality_gate:
 
 The lifecycle manager uses recall as the decision metric. Passing the quality gate means that a candidate is eligible for lifecycle evaluation; it **does not** guarantee promotion. If the candidate does not improve on Production, it is archived and the Production model remains unchanged.
 
+### Current artifact audit (5 Nov 2026)
+
+The evaluation stage selects the highest registered model version, evaluates it on the configured holdout, and records its MLflow URI, run ID, version, and registry stage in both reports. The configured local training output is `models/random_forest_model.pkl`; the older `models/churn_model.pkl` expects 45 features and is not used by the current 30-feature evaluation path.
+
+The current local registry snapshot evaluates version 13 (`models:/Telco_Churn_Production_Model/13`): recall is `0.700535` against the configured `0.70` threshold, so the quality gate passes. Version 13 is at registry stage `None`, not Production. The checked-in API bundle is a compatible 30-feature local snapshot, but it does not match a version in the current registry; its metadata therefore marks provenance as unverified, and production deployment is blocked until a verified Production version and matching preprocessor are available.
+
 ## Technology Stack
 
 | Area | Tools |
@@ -359,13 +365,13 @@ Keep this terminal open while waiting for jobs. Scheduled runs require the PC to
 
 ### Environment-specific path
 
-The current workflow uses this project path:
+The workflow uses GitHub's checkout path (`GITHUB_WORKSPACE`) and finds `.venv` or `venv` inside that checkout. It does not depend on a user-specific project path.
 
 ```text
-C:\Users\jnane\Favorites\churn-prediction
+%GITHUB_WORKSPACE%
 ```
 
-If the project is moved to another directory or run by another Windows user, update the workflow path accordingly. The local project and its virtual environment are prerequisites for this self-hosted workflow; this workflow is not a portable GitHub-hosted Linux job.
+The local project and its virtual environment remain prerequisites for this self-hosted workflow; this workflow is not a portable GitHub-hosted Linux job.
 
 ### Triggering a manual run
 
@@ -388,13 +394,13 @@ deployment/
 └── model_metadata.json
 ```
 
-The deployment metadata records the model name/version and source run. The deployment script uses a model-version image tag such as:
+The deployment metadata records model hashes and MLflow provenance. The deployment script uses a model-version and bundle-fingerprint tag such as:
 
 ```text
-churn-prediction-api:model-v1
+churn-prediction-api:model-v1-<bundle-sha256-prefix>
 ```
 
-The deployment automation builds the image when the tag does not already exist, otherwise it reuses the local image; it then updates the Kubernetes deployment and waits for rollout completion. The promotion gate prevents an unpromoted candidate from replacing the Production service.
+The deployment automation verifies bundle hashes and Docker provenance labels before reusing an image. Otherwise it rebuilds the image, updates Kubernetes, verifies the requested image, and waits for the readiness-probed rollout. Promotion and provenance gates prevent an unpromoted or unverified bundle from replacing the Production service.
 
 Useful operational commands:
 
@@ -432,7 +438,9 @@ The currently configured Docker Desktop cluster and image cache are local to the
 
 Some runtime folders are ignored by Git and should be regenerated or retained locally rather than committed wholesale. Check `.gitignore` before staging generated reports, model binaries, local databases, or incoming data files.
 
-## Verified Integration Run
+## Historical Verified Integration Run
+
+The following values describe a previously recorded run, not the current local MLflow registry snapshot. Current evaluation and quality results are in `reports/evaluation_report.json` and `reports/quality_gate_report.json`.
 
 The following is a snapshot from a successful GitHub Actions end-to-end run, not a guarantee that future runs will produce identical metrics.
 

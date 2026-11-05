@@ -1,5 +1,6 @@
 import os
 import sys
+from pathlib import Path
 
 import joblib
 import mlflow
@@ -36,7 +37,25 @@ def train_and_register_model():
         print("[ERROR] Processed data not found. Please run 03_preprocessing_mlops.py first.")
         return False
 
+    if X_train.ndim != 2 or X_test.ndim != 2 or X_train.shape[1] != X_test.shape[1]:
+        raise ValueError(f"Processed train/test feature mismatch: {X_train.shape} vs {X_test.shape}")
+    if len(X_train) != len(y_train) or len(X_test) != len(y_test):
+        raise ValueError("Processed feature/label row counts do not match")
+
     model_cfg = config["model"]
+    preprocessor_path = Path(config["paths"]["preprocessor"])
+    if not preprocessor_path.exists():
+        raise FileNotFoundError(f"Preprocessor artifact not found: {preprocessor_path}")
+    preprocessor = joblib.load(preprocessor_path)
+    try:
+        preprocessor_output_features = len(preprocessor.get_feature_names_out())
+    except (AttributeError, ValueError) as exc:
+        raise ValueError("Cannot determine configured preprocessor output feature count") from exc
+    if preprocessor_output_features != X_train.shape[1]:
+        raise ValueError(
+            f"Configured preprocessor emits {preprocessor_output_features} features, "
+            f"but processed training data contains {X_train.shape[1]}"
+        )
 
     params = {
         "n_estimators": model_cfg["n_estimators"],
@@ -49,6 +68,9 @@ def train_and_register_model():
         mlflow.log_params(params)
         mlflow.log_param("model_family", "RandomForest")
         mlflow.log_param("lab", "ML Pipeline")
+        mlflow.log_param("input_feature_count", int(X_train.shape[1]))
+        mlflow.log_param("train_rows", int(len(y_train)))
+        mlflow.log_param("test_rows", int(len(y_test)))
 
         if os.getenv("GITHUB_RUN_ID"):
             mlflow.log_param("github_run_id", os.getenv("GITHUB_RUN_ID"))
@@ -58,6 +80,8 @@ def train_and_register_model():
         print("[INFO] Training RandomForest model...")
         model = RandomForestClassifier(**params)
         model.fit(X_train, y_train)
+        if model.n_features_in_ != preprocessor_output_features:
+            raise ValueError("Trained model feature count differs from the preprocessing output")
 
         print("[INFO] Evaluating model on the held-out test set...")
         y_pred = model.predict(X_test)
@@ -76,9 +100,7 @@ def train_and_register_model():
         os.makedirs("models", exist_ok=True)
         joblib.dump(model, config["paths"]["model"])
 
-        preprocessor_path = config["paths"]["preprocessor"]
-        if os.path.exists(preprocessor_path):
-            mlflow.log_artifact(preprocessor_path, artifact_path="preprocessing_pipeline")
+        mlflow.log_artifact(str(preprocessor_path), artifact_path="preprocessing_pipeline")
 
         print("[INFO] Pushing model to MLflow Registry...")
         mlflow.sklearn.log_model(

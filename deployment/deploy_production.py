@@ -1,8 +1,10 @@
 import json
+import hashlib
 import subprocess
 import sys
 from pathlib import Path
 
+import joblib
 import yaml
 
 
@@ -15,14 +17,22 @@ REPORT_PATH = PROJECT_ROOT / "reports" / "deployment_automation_report.json"
 IMAGE_NAME = "churn-prediction-api"
 
 
-def run_command(command):
+def run_command(command, capture_output=False):
     print(f"[INFO] Running: {' '.join(command)}")
-    result = subprocess.run(command, cwd=PROJECT_ROOT)
+    result = subprocess.run(command, cwd=PROJECT_ROOT, text=True, capture_output=capture_output)
 
     if result.returncode != 0:
         raise RuntimeError(f"Command failed with exit code {result.returncode}: {' '.join(command)}")
 
     return result
+
+
+def sha256_file(path):
+    digest = hashlib.sha256()
+    with path.open("rb") as artifact:
+        for chunk in iter(lambda: artifact.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def load_metadata():
@@ -67,6 +77,8 @@ def deploy_production():
     model_stage = metadata["model_stage"]
     run_id = metadata["run_id"]
 
+    if metadata.get("provenance_status") != "verified" or not model_version or not run_id:
+        raise RuntimeError("Deployment blocked: model version/run provenance is not verified.")
     if model_stage != "Production":
         raise RuntimeError(f"Deployment blocked. Model stage is '{model_stage}', not 'Production'.")
 
@@ -79,7 +91,36 @@ def deploy_production():
     if not preprocessor_path.exists():
         raise FileNotFoundError(f"Preprocessor artifact not found: {preprocessor_path}")
 
-    image_tag = f"{IMAGE_NAME}:model-v{model_version}"
+    model = joblib.load(model_path)
+    preprocessor = joblib.load(preprocessor_path)
+    model_features = getattr(model, "n_features_in_", None)
+    try:
+        preprocessor_features = len(preprocessor.get_feature_names_out())
+    except (AttributeError, ValueError) as exc:
+        raise ValueError("Cannot verify deployment preprocessor output feature count") from exc
+    if model_features != preprocessor_features:
+        raise ValueError(
+            f"Deployment bundle mismatch: model expects {model_features} features, "
+            f"preprocessor emits {preprocessor_features}"
+        )
+    if metadata.get("model_feature_count") not in (None, model_features):
+        raise ValueError("Deployment model feature count does not match model metadata")
+    if metadata.get("preprocessor_output_feature_count") not in (None, preprocessor_features):
+        raise ValueError("Deployment preprocessor feature count does not match model metadata")
+
+    model_hash = sha256_file(model_path)
+    preprocessor_hash = sha256_file(preprocessor_path)
+    computed_fingerprint = hashlib.sha256(
+        f"{model_hash}:{preprocessor_hash}:{model_name}:{model_version}:{run_id}".encode("utf-8")
+    ).hexdigest()
+    fingerprint = metadata.get("bundle_fingerprint") or computed_fingerprint
+    if fingerprint != computed_fingerprint:
+        raise ValueError("Deployment bundle fingerprint does not match model metadata and artifact hashes")
+    if metadata.get("model_sha256") not in (None, model_hash):
+        raise ValueError("Deployment model checksum does not match model_metadata.json")
+    if metadata.get("preprocessor_sha256") not in (None, preprocessor_hash):
+        raise ValueError("Deployment preprocessor checksum does not match model_metadata.json")
+    image_tag = f"{IMAGE_NAME}:model-v{model_version}-{fingerprint[:12]}"
 
     print(f"[INFO] Model        : {model_name}")
     print(f"[INFO] Model version: {model_version}")
@@ -88,14 +129,48 @@ def deploy_production():
     print(f"[INFO] Kubernetes   : {deployment_name}")
     print(f"[INFO] Container    : {container_name}")
 
-    image_exists = subprocess.run(["docker", "image", "inspect", image_tag], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
+    labels = {
+        "com.churn.model-name": str(model_name),
+        "com.churn.model-version": str(model_version),
+        "com.churn.model-run-id": str(run_id),
+        "com.churn.bundle-sha256": fingerprint,
+    }
+    inspect_format = "{{json .Config.Labels}}"
+    inspected = subprocess.run(
+        ["docker", "image", "inspect", "--format", inspect_format, image_tag],
+        cwd=PROJECT_ROOT,
+        text=True,
+        capture_output=True,
+    )
+    image_labels = {}
+    if inspected.returncode == 0:
+        try:
+            image_labels = json.loads(inspected.stdout.strip()) or {}
+        except json.JSONDecodeError:
+            image_labels = {}
+    image_matches = inspected.returncode == 0 and all(
+        image_labels.get(key) == value for key, value in labels.items()
+    )
 
-    if image_exists:
-        print(f"[INFO] Docker image already exists: {image_tag}")
-        print("[INFO] Reusing existing image.")
+    if image_matches:
+        print(f"[INFO] Docker image bundle verified: {image_tag}")
     else:
-        print("[INFO] Docker image not found. Building...")
-        run_command(["docker", "build", "-t", image_tag, "."])
+        print("[INFO] Docker image is missing or its provenance labels do not match; building.")
+        build_command = ["docker", "build", "-t", image_tag]
+        for key, value in {
+            "MODEL_NAME": model_name,
+            "MODEL_VERSION": model_version,
+            "MODEL_RUN_ID": run_id,
+            "MODEL_BUNDLE_SHA256": fingerprint,
+        }.items():
+            build_command.extend(["--build-arg", f"{key}={value}"])
+        build_command.append(".")
+        run_command(build_command)
+
+    context_result = run_command(["kubectl", "config", "current-context"], capture_output=True)
+    kubernetes_context = context_result.stdout.strip()
+    if not kubernetes_context:
+        raise RuntimeError("kubectl returned an empty current context")
 
     print("[INFO] Updating Kubernetes deployment...")
     run_command([
@@ -105,6 +180,13 @@ def deploy_production():
         f"deployment/{deployment_name}",
         f"{container_name}={image_tag}"
     ])
+
+    deployed_image = run_command([
+        "kubectl", "get", "deployment", deployment_name,
+        "-o", "jsonpath={.spec.template.spec.containers[0].image}",
+    ], capture_output=True).stdout.strip()
+    if deployed_image != image_tag:
+        raise RuntimeError(f"Kubernetes deployment image mismatch: expected {image_tag}, got {deployed_image}")
 
     print("[INFO] Waiting for Kubernetes rollout...")
     run_command([
@@ -121,15 +203,20 @@ def deploy_production():
         "model_version": str(model_version),
         "run_id": run_id,
         "docker_image": image_tag,
-        "kubernetes_context": "docker-desktop",
+        "kubernetes_context": kubernetes_context,
         "kubernetes_deployment": deployment_name,
         "kubernetes_container": container_name,
         "app_label": app_label,
         "deployment_bundle": {
             "model": str(model_path.relative_to(PROJECT_ROOT)),
             "preprocessor": str(preprocessor_path.relative_to(PROJECT_ROOT)),
-            "metadata": str(METADATA_PATH.relative_to(PROJECT_ROOT))
-        }
+            "metadata": str(METADATA_PATH.relative_to(PROJECT_ROOT)),
+            "fingerprint": fingerprint,
+            "model_sha256": model_hash,
+            "preprocessor_sha256": preprocessor_hash,
+        },
+        "image_labels_verified": True,
+        "deployed_image_verified": True,
     }
 
     save_report(report)

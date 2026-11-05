@@ -42,7 +42,9 @@ A simulated 100-row batch with distinct IDs `NEW000201`–`NEW000300` passed sch
 
 These are recorded demonstration results, not current live measurements.
 
-### Candidate training and quality gate
+### Historical candidate training and quality gate
+
+The following candidate-v17 metrics are historical evidence from an earlier integration run.
 
 Candidate model version 17 was trained and registered in MLflow:
 
@@ -55,7 +57,7 @@ Candidate model version 17 was trained and registered in MLflow:
 
 The recall quality gate required at least 0.70, so the candidate passed the gate.
 
-### Lifecycle and deployment decision
+### Historical lifecycle and deployment decision
 
 Production version 1 had recall approximately 0.78075, higher than candidate v17's 0.7219. The lifecycle manager retained Production v1 and archived v17. The promotion-gated deployment step saw `promoted: false` and skipped deployment. Production inference then ran using the registered Production model.
 
@@ -96,3 +98,9 @@ The monitoring workflow is merged into `main` and is configured with `workflow_d
 - Scheduled execution therefore depends on the runner being online at the scheduled time.
 - The promotion-positive deployment path remains unverified with a naturally better candidate.
 - Deployment/Kubernetes checks require Docker Desktop and Kubernetes to be running.
+
+## Final audit snapshot (5 Nov 2026)
+
+The latest registered model in the local MLflow database is version 13. It evaluates to recall `0.700535` on the current 1,409-row holdout and passes the configured recall threshold of `0.70`; the generated evaluation and quality reports record the same model URI and run ID. Version 13 is at stage `None`, and the current registry contains no Production-stage version. The checked-in serving model/preprocessor pair is dimensionally compatible (30 output features) but is not attributable to the current registry, so metadata marks it unverified and deployment correctly refuses it.
+
+The main pipeline currently defines ten stages in `churn_prediction_pipeline.py`. Older saved pipeline logs that list reproducibility and failure-injection stages are historical snapshots and must not be interpreted as the stage list for the current orchestrator. The Lab 8 CI workflow runs pytest before the pipeline on configured push, pull request, and manual triggers.

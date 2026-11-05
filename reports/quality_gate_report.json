@@ -1,7 +1,16 @@
 {
-    "stage": "Lab 8 - Model Quality Gate",
-    "metric": "f1_score",
-    "minimum_value": 0.6,
-    "actual_value": 0.6252771618625277,
-    "status": "PASSED"
+  "stage": "Model Quality Gate",
+  "metric": "recall",
+  "minimum_value": 0.7,
+  "actual_value": 0.7005347593582888,
+  "status": "PASSED",
+  "model": {
+    "name": "Telco_Churn_Production_Model",
+    "version": "13",
+    "run_id": "a16d35590d3042e185a66c595f5d3c08",
+    "uri": "models:/Telco_Churn_Production_Model/13",
+    "source": "models:/m-00feeac8b2d2451fb44661d0862c01be",
+    "registered_stage": "None",
+    "run_name": "RandomForest_Registry_V2"
+  }
 }

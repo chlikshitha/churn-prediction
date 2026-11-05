@@ -43,6 +43,9 @@ def main():
 
     evolved = pd.read_csv(EVOLVED_PATH)
 
+    if "Churn" not in evolved.columns:
+        raise ValueError(f"Concept-drift dataset must contain target column 'Churn': {EVOLVED_PATH}")
+
     evolved_X = evolved.drop(columns=["Churn"])
     evolved_y = evolved["Churn"].to_numpy()
 
@@ -54,6 +57,7 @@ def main():
 
     model_loader = ModelLoader()
     model_loader.load()
+    model_loader.require_verified_production()
 
     print()
     print("Model information")
@@ -100,6 +104,11 @@ def main():
             "baseline": baseline_value,
             "evolved": evolved_value,
             "change": change,
+            "model_name": model_loader.model_name,
+            "model_version": str(model_loader.model_version),
+            "run_id": model_loader.run_id,
+            "model_stage": model_loader.metadata.get("model_stage"),
+            "model_uri": model_loader.model_uri,
         })
 
     report = pd.DataFrame(results)

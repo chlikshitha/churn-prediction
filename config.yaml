@@ -37,7 +37,7 @@ lab9:
 
 paths:
   preprocessor: models/preprocessor.pkl
-  model: models/churn_model.pkl
+  model: models/random_forest_model.pkl
   evaluation_report: reports/evaluation_report.json
   quality_gate_report: reports/quality_gate_report.json
   failure_report: reports/failure_report.json

@@ -2,21 +2,9 @@ name: Lab 8 - MLOps CI
 
 on:
   push:
-    branches: [main, master]
-    paths:
-      - "config.yaml"
-      - "src/mlops_pipeline/**"
-      - "requirements.txt"
-      - "data/raw/churn.csv"
-      - ".github/workflows/lab8_ci.yml"
   pull_request:
-    paths:
-      - "config.yaml"
-      - "src/mlops_pipeline/**"
-      - "requirements.txt"
-      - "data/raw/churn.csv"
-      - ".github/workflows/lab8_ci.yml"
   workflow_dispatch:
+
 jobs:
   mlops-ci:
     runs-on: ubuntu-latest

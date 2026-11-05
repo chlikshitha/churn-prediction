@@ -1,21 +1,37 @@
 {
-  "stage": "Lab 8/9 model evaluation",
+  "stage": "Model evaluation",
+  "evaluated_on": "configured held-out test split",
+  "evaluated_at": "2026-11-05T08:47:59.782582+00:00",
   "test_rows": 1409,
+  "feature_count": 30,
+  "model": {
+    "name": "Telco_Churn_Production_Model",
+    "version": "13",
+    "run_id": "a16d35590d3042e185a66c595f5d3c08",
+    "uri": "models:/Telco_Churn_Production_Model/13",
+    "source": "models:/m-00feeac8b2d2451fb44661d0862c01be",
+    "registered_stage": "None",
+    "run_name": "RandomForest_Registry_V2"
+  },
+  "quality_gate_config": {
+    "metric": "recall",
+    "minimum_value": 0.7
+  },
   "metrics": {
-    "accuracy": 0.7601135557132718,
-    "precision": 0.5340909090909091,
-    "recall": 0.7540106951871658,
-    "f1_score": 0.6252771618625277,
-    "roc_auc": 0.84119197085949
+    "accuracy": 0.7700496806245565,
+    "precision": 0.5527426160337553,
+    "recall": 0.7005347593582888,
+    "f1_score": 0.6179245283018868,
+    "roc_auc": 0.8321281872432766
   },
   "confusion_matrix": [
     [
-      789,
-      246
+      823,
+      212
     ],
     [
-      92,
-      282
+      112,
+      262
     ]
   ]
 }

@@ -1,10 +1,16 @@
 {
-    "model_name": "Telco_Churn_Production_Model",
-    "model_version": "1",
-    "model_stage": "Production",
-    "run_id": "e6b24fcde8574a95a7bc1ce6da74b0dc",
-    "model_source": "models:/m-0b44c639cae04d2da060f7b7f01e34d1",
-    "model_id": "m-0b44c639cae04d2da060f7b7f01e34d1",
-    "preprocessor_artifact": "preprocessing_pipeline/preprocessor.pkl",
-    "source": "MLflow"
+  "model_name": "local-unverified-bundle",
+  "model_version": null,
+  "model_stage": "UNVERIFIED",
+  "run_id": null,
+  "model_source": null,
+  "model_id": null,
+  "model_uri": "local://deployment/model.pkl",
+  "source": "local_artifact_snapshot",
+  "provenance_status": "unverified",
+  "model_sha256": "c91c8b2e13579c6c894046cc345085ef76d88803f0dfabb3130d78ad77df32cb",
+  "preprocessor_sha256": "6a8c04562eba9e73b24cff5b30f800d823819268da2da7487b3627d7511ee458",
+  "bundle_fingerprint": "2af495b231157dc5e2776c9f3c9637e1db8057e608801ceefbad24421fe10f3a",
+  "model_feature_count": 30,
+  "preprocessor_output_feature_count": 30
 }

@@ -18,13 +18,9 @@ churn_prediction_pipeline.py
         upload reports/artifacts
 ```
 
-## Triggered changes
+## Triggers and test execution
 
-- `config.yaml`
-- `src/mlops_pipeline/**`
-- `requirements.txt`
-- `data/raw/churn.csv`
-- the CI workflow itself
+The Lab 8 workflow runs on every push, every pull request, and `workflow_dispatch`. It installs pytest and runs `pytest -p no:cacheprovider -q` before the MLOps pipeline, so changes to tests are not excluded by path filters.
 
 ## Repeated run demonstration
 

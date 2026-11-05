@@ -4,7 +4,7 @@
 
 1. Start Docker Desktop and wait until the Docker engine and Kubernetes cluster are ready if the run needs Docker/Kubernetes operations.
 2. Ensure the local project checkout is on `main` and up to date.
-3. Confirm the project virtual environment exists at `C:\Users\jnane\Favorites\churn-prediction\venv`.
+3. Run commands from the repository root and use its `.venv` or `venv` environment.
 4. Start the interactive GitHub Actions runner in a separate PowerShell window:
 
    ```powershell
@@ -40,8 +40,11 @@ Inspect `outputs/monitoring/monitor_trigger_report.json` from the project root.
 | `no_drift` | The combined drift report did not identify drift; the pipeline is not called. |
 | `drift_waiting_for_data` | Drift was detected, but the incoming batch file is missing. |
 | `no_new_data_retraining_skipped` | The file exists, but its hash was already recorded as ingested. |
+| `prediction_data_waiting_for_labels` | A valid incoming batch has features but no churn labels; it is not appended to training data and the pipeline stops before training. |
 | `retraining_completed` | New data was ingested and the main pipeline returned success. Check the lifecycle report for the promotion decision. |
 | `drift_analysis_failed` | Drift analysis failed; inspect the workflow log and the required source reports. |
+
+Prediction and concept drift require a deployment bundle verified against a model in the MLflow `Production` stage. If the local deployment metadata says `unverified` or MLflow has no Production version, monitoring reports `drift_analysis_failed` and does not generate a current combined drift result. The trigger invalidates the previous combined report at the start of each run so stale results are not presented as current.
 
 A file named `new_churn.csv` is not automatically new data. The loader compares the file's SHA-256 hash with `data/raw/archive/dataset_lineage.json`. A new batch must pass schema validation and use customer IDs that do not overlap with the current dataset.
 

@@ -10,9 +10,26 @@ OUTPUT_PATH = Path("outputs/drift/drift_analysis_report.csv")
 
 
 def load_reports():
-    data_drift = pd.read_csv(DATA_DRIFT_PATH)
-    prediction_drift = pd.read_csv(PREDICTION_DRIFT_PATH)
-    concept_drift = pd.read_csv(CONCEPT_DRIFT_PATH)
+    paths = [DATA_DRIFT_PATH, PREDICTION_DRIFT_PATH, CONCEPT_DRIFT_PATH]
+    missing = [str(path) for path in paths if not path.is_file()]
+    if missing:
+        raise FileNotFoundError(f"Required drift report(s) missing; regenerate upstream reports first: {missing}")
+    data_drift, prediction_drift, concept_drift = [pd.read_csv(path) for path in paths]
+    required = [
+        (data_drift, {"status", "feature"}, DATA_DRIFT_PATH),
+        (prediction_drift, {"prediction_distribution_status", "probability_distribution_status", "model_name", "model_version", "run_id", "model_stage"}, PREDICTION_DRIFT_PATH),
+        (concept_drift, {"metric", "change", "model_name", "model_version", "run_id", "model_stage"}, CONCEPT_DRIFT_PATH),
+    ]
+    for frame, columns, path in required:
+        if frame.empty or not columns.issubset(frame.columns):
+            raise ValueError(f"Drift report is empty or missing required columns {sorted(columns)}: {path}")
+    prediction_identity = prediction_drift.iloc[0]
+    identity_columns = ["model_name", "model_version", "run_id", "model_stage"]
+    if prediction_identity["model_stage"] != "Production" or any(pd.isna(prediction_identity[key]) for key in identity_columns):
+        raise ValueError("Prediction-drift report does not contain verified Production-model provenance")
+    for column in identity_columns:
+        if concept_drift[column].isna().any() or set(concept_drift[column].astype(str)) != {str(prediction_identity[column])}:
+            raise ValueError(f"Concept and prediction drift reports disagree on model provenance field {column!r}")
 
     return data_drift, prediction_drift, concept_drift
 
@@ -159,6 +176,9 @@ def main():
         prediction_summary,
         concept_summary,
     )
+    model_identity = prediction_drift.iloc[0]
+    for column in ("model_name", "model_version", "run_id", "model_stage"):
+        summary[column] = model_identity[column]
 
     OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     summary.to_csv(OUTPUT_PATH, index=False)
