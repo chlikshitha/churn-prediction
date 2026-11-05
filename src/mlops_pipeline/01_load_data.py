@@ -6,9 +6,10 @@ import os
 import shutil
 
 import pandas as pd
+import pandera.pandas as pa
 import yaml
 
-from validation import validate_schema
+from validation import get_telco_schema, validate_schema
 
 CONFIG_PATH = Path("config.yaml")
 
@@ -91,18 +92,57 @@ def create_data_load_report(report_path, report):
         json.dump(report, f, indent=2, default=str)
 
 
+def read_csv_with_clean_headers(file_path):
+    """Read project CSVs and normalize invisible/edge whitespace in headers."""
+    df = pd.read_csv(file_path, encoding="utf-8-sig")
+    cleaned_columns = [str(column).strip().lstrip("\ufeff") for column in df.columns]
+
+    if len(cleaned_columns) != len(set(cleaned_columns)):
+        raise ValueError(f"CSV contains duplicate column names after header cleanup: {file_path}")
+
+    df.columns = cleaned_columns
+    return df
+
+
 def ingest_new_data(raw_path, new_data_path, archive_dir, lineage_path, report_path):
-    current_df = pd.read_csv(raw_path)
-    new_df = pd.read_csv(new_data_path)
+    current_df = read_csv_with_clean_headers(raw_path)
+    new_df = read_csv_with_clean_headers(new_data_path)
 
     print(f"[INFO] Current dataset rows: {len(current_df)}")
     print(f"[INFO] New dataset rows: {len(new_df)}")
 
     print("[INFO] Validating new dataset schema...")
-    schema_valid = validate_schema(new_df, output_report_name="new_data_validation.csv")
+    has_churn = "Churn" in new_df.columns
+    if has_churn:
+        schema_valid = validate_schema(new_df, output_report_name="new_data_validation.csv")
+    else:
+        prediction_schema = get_telco_schema().remove_columns(["Churn"])
+        try:
+            prediction_schema.validate(new_df, lazy=True)
+            schema_valid = True
+            print("[SUCCESS] Unlabeled prediction data schema validation passed.")
+        except pa.errors.SchemaErrors as err:
+            failures = err.failure_cases[["schema_context", "column", "check", "failure_case", "index"]]
+            print("[ERROR] Schema Validation FAILED. Corruptions detected.")
+            print(failures.to_string())
+            os.makedirs("artifacts", exist_ok=True)
+            failures.to_csv("artifacts/new_data_validation.csv", index=False)
+            schema_valid = False
 
     if not schema_valid:
         raise ValueError("New dataset failed schema validation. Ingestion stopped.")
+
+    if not has_churn:
+        print("[INFO] Unlabeled prediction data will not be appended to the labelled training dataset.")
+        report = {
+            "status": "unlabeled_prediction_data",
+            "ingestion_performed": False,
+            "current_rows": len(current_df),
+            "new_rows": len(new_df),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        create_data_load_report(report_path, report)
+        return False
 
     new_data_hash = calculate_file_hash(new_data_path)
     print(f"[INFO] New dataset SHA256: {new_data_hash}")
@@ -185,7 +225,7 @@ def load_current_data(raw_path):
     if not raw_path.exists():
         raise FileNotFoundError(f"Current dataset not found: {raw_path}")
 
-    df = pd.read_csv(raw_path)
+    df = read_csv_with_clean_headers(raw_path)
 
     if df.empty:
         raise ValueError(f"Current dataset is empty: {raw_path}")

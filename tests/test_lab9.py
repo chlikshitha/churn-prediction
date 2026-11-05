@@ -5,11 +5,12 @@ import unittest
 import sys
 import pandas as pd
 import pandera as pa
-import validation as schema_validation
 
 ROOT = Path(__file__).resolve().parents[1]
 PIPELINE_DIR = ROOT / "src" / "mlops_pipeline"
 sys.path.insert(0, str(PIPELINE_DIR))
+import validation as schema_validation
+
 spec = importlib.util.spec_from_file_location("validate_data", ROOT / "src/mlops_pipeline/02_validate_data.py")
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
