@@ -1,0 +1,20 @@
+name: "Lab 2 - EDA and Data Cleaning"
+
+on:
+  workflow_dispatch:
+
+jobs:
+  validate-eda-notebook:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Validate EDA and cleaning notebook sections
+        run: |
+          python -c "import json,pathlib; p=pathlib.Path('notebooks/churn_prediction.ipynb'); nb=json.loads(p.read_text(encoding='utf-8')); text='\\n'.join(''.join(c.get('source',[])) for c in nb['cells'] if c.get('cell_type')=='markdown'); expected=['Phase 3: EDA','Phase 4: Data Cleaning','Phase 5: Feature Engineering']; missing=[section for section in expected if section not in text]; assert not missing, f'Missing notebook sections: {missing}'; print('Validated EDA, data cleaning, and feature engineering sections.')"

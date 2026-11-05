@@ -1,0 +1,33 @@
+name: "Lab 7 - ML Pipeline Engineering"
+
+on:
+  workflow_dispatch:
+
+jobs:
+  ml-pipeline-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install project dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Validate raw data
+        run: python src/mlops_pipeline/02_validate_data.py
+
+      - name: Run configured preprocessing
+        run: python src/mlops_pipeline/03_preprocessing.py
+
+      - name: Validate processed outputs
+        run: python src/mlops_pipeline/04_validate_outputs.py
+
+      - name: Verify orchestrator stage inventory
+        run: python -c "from src.mlops_pipeline.churn_prediction_pipeline import STAGES; assert len(STAGES)==10, f'Expected 10 configured pipeline stages, got {len(STAGES)}'; assert all(script.startswith('src/mlops_pipeline/') for _,script in STAGES); print('Validated all 10 configured pipeline stages.')"

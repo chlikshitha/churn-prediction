@@ -1,0 +1,42 @@
+name: "Lab 11 - Containerization and Kubernetes Deployment"
+
+on:
+  workflow_dispatch:
+
+jobs:
+  container-and-manifest-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build the Lab 11 API image
+        run: docker build --tag churn-prediction-api:lab11 .
+
+      - name: Smoke test container health and prediction
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --detach --name churn-api-lab11 --publish 8000:8000 churn-prediction-api:lab11
+          cleanup() { docker logs churn-api-lab11 || true; docker rm --force churn-api-lab11 >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8000/health >/dev/null; then break; fi
+            if [ "$attempt" -eq 30 ]; then echo "API did not become healthy"; exit 1; fi
+            sleep 2
+          done
+          curl --fail --silent http://127.0.0.1:8000/health | python -c "import json,sys; assert json.load(sys.stdin)['status']=='healthy'"
+          curl --fail --silent --show-error -X POST http://127.0.0.1:8000/predict \
+            -H 'Content-Type: application/json' \
+            -d '{"customerID":"CI-0001","gender":"Female","SeniorCitizen":0,"Partner":"Yes","Dependents":"No","tenure":12,"PhoneService":"Yes","MultipleLines":"No","InternetService":"DSL","OnlineSecurity":"No","OnlineBackup":"Yes","DeviceProtection":"No","TechSupport":"No","StreamingTV":"No","StreamingMovies":"No","Contract":"Month-to-month","PaperlessBilling":"Yes","PaymentMethod":"Electronic check","MonthlyCharges":70.35,"TotalCharges":"844.20"}' \
+            | python -c "import json,sys; r=json.load(sys.stdin); assert r['prediction'] in (0,1) and 0.0 <= r['churn_probability'] <= 1.0"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Validate Kubernetes deployment and service manifests
+        run: |
+          python -m pip install PyYAML
+          python -c "import yaml; d=yaml.safe_load(open('k8s/deployment.yaml',encoding='utf-8')); s=yaml.safe_load(open('k8s/service.yaml',encoding='utf-8')); assert d['kind']=='Deployment' and s['kind']=='Service'; container=d['spec']['template']['spec']['containers'][0]; assert container['image'] and container['ports'][0]['containerPort']==8000; probes={'startupProbe','readinessProbe','livenessProbe'}; assert probes.issubset(container), f'Missing health probes: {probes-set(container)}'; assert s['spec']['selector']==d['spec']['selector']['matchLabels']; print('Validated image build, Kubernetes resources, selectors, port, and health probes.')"

@@ -1,0 +1,25 @@
+name: "Lab 10 - ML Model Serving and API Engineering"
+
+on:
+  workflow_dispatch:
+
+jobs:
+  api-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements-api.txt
+
+      - name: Install API dependencies
+        run: python -m pip install -r requirements-api.txt
+
+      - name: Validate API routes and request schemas
+        run: |
+          python -c "from api.main import app; from api.schemas import CustomerInput,BatchPredictionRequest; routes=app.openapi()['paths']; expected={'/','/health','/metadata','/predict','/predict/batch'}; missing=expected-set(routes); assert not missing, f'Missing API routes: {sorted(missing)}'; fields=CustomerInput.model_fields; assert 'customerID' in fields and 'tenure' in fields and 'TotalCharges' in fields; assert 'customers' in BatchPredictionRequest.model_fields; print('Validated API routes and single/batch request schemas.')"

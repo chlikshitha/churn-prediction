@@ -1,0 +1,20 @@
+name: "Lab 1 - Initial Data Loading and Inspection"
+
+on:
+  workflow_dispatch:
+
+jobs:
+  validate-data-loading:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Validate notebook and source dataset
+        run: |
+          python -c "import csv,json,pathlib; n=json.loads(pathlib.Path('notebooks/churn_prediction.ipynb').read_text(encoding='utf-8')); rows=list(csv.DictReader(pathlib.Path('data/raw/churn.csv').open(newline='',encoding='utf-8'))); required={'customerID','Churn'}; assert n['cells'] and rows and required.issubset(rows[0]), 'Notebook or required dataset fields are missing'; print(f'Validated {len(rows)} source rows and required columns: {sorted(required)}')"

@@ -1,0 +1,38 @@
+name: "Lab 12 - Monitoring, Drift, and Continuous Training"
+
+on:
+  workflow_dispatch:
+
+jobs:
+  data-drift-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install project dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Generate the configured evolved-data fixture
+        run: python src/mlops_pipeline/12_create_evolved_dataset.py
+
+      - name: Run Lab 12 data-drift analysis
+        run: python src/mlops_pipeline/12_data_drift.py
+
+      - name: Verify drift report output
+        run: python -c "import pandas as pd; r=pd.read_csv('outputs/drift/data_drift_report.csv'); assert len(r)==6 and {'feature','status'}.issubset(r.columns), 'Expected six feature-level drift results'; assert r['status'].isin(['DRIFT','OK']).all(), 'Unexpected drift status'; assert r['status'].eq('DRIFT').any(), 'The configured evolved fixture did not produce the expected detectable drift'; print(r[['feature','status']].to_string(index=False))"
+
+      - name: Upload Lab 12 drift evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lab12-drift-${{ github.run_number }}
+          path: outputs/drift/**
+          if-no-files-found: ignore
